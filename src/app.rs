@@ -921,6 +921,8 @@ pub struct App {
     held_update: Option<HeldUpdate>,
     /// Winamp window state and active skin.
     pub winamp: crate::winamp::WinampState,
+    /// Shared subwoofer settings for real-time DSP parameter synchronization.
+    pub subwoofer: crate::sink::SharedSubwoofer,
     /// The spectrum behind the player bar, when that is chosen.
     pub player_bar_analyser: crate::vis::WideAnalyser,
     /// The window's pixels per point when it last drew, so artwork chosen
@@ -1138,12 +1140,23 @@ impl App {
             Ok(proxy) => proxy,
             Err(error) => crate::settings::ProxyConfig::Invalid(error),
         };
+        let subwoofer = crate::sink::shared_subwoofer(crate::sink::SubwooferConfig {
+            enabled: settings.subwoofer_enabled,
+            device: settings
+                .subwoofer_device
+                .clone()
+                .filter(|device| !device.trim().is_empty()),
+            cutoff_hz: settings.subwoofer_cutoff_hz,
+            gain_db: settings.subwoofer_gain_db,
+            delay_ms: settings.subwoofer_delay_ms,
+        });
         let engine_config = engine_config(
             &dirs,
             &settings,
             applied_proxy.clone(),
             std::sync::Arc::clone(&tap),
             std::sync::Arc::clone(&eq),
+            std::sync::Arc::clone(&subwoofer),
         );
         let backend = Backend::spawn(
             dirs.clone(),
@@ -1533,6 +1546,7 @@ impl App {
             update_receipt: None,
             held_update: None,
             winamp: crate::winamp::WinampState::new(session.winamp_pos, tap, eq),
+            subwoofer,
             player_bar_analyser: crate::vis::WideAnalyser::default(),
             pixels_per_point: 1.0,
         };
@@ -5370,6 +5384,24 @@ impl App {
     fn push_eq(&mut self) {
         if let Ok(mut shared) = self.winamp.eq.lock() {
             *shared = eq_settings(&self.settings);
+        }
+        self.settings_dirty = true;
+    }
+
+    /// Sends subwoofer settings to the player in real-time and marks them for saving.
+    pub fn push_subwoofer(&mut self) {
+        if let Ok(mut shared) = self.subwoofer.lock() {
+            *shared = crate::sink::SubwooferConfig {
+                enabled: self.settings.subwoofer_enabled,
+                device: self
+                    .settings
+                    .subwoofer_device
+                    .clone()
+                    .filter(|device| !device.trim().is_empty()),
+                cutoff_hz: self.settings.subwoofer_cutoff_hz,
+                gain_db: self.settings.subwoofer_gain_db,
+                delay_ms: self.settings.subwoofer_delay_ms,
+            };
         }
         self.settings_dirty = true;
     }
@@ -13678,7 +13710,7 @@ impl App {
             Action::SetSubwooferDevice(device) => {
                 if self.settings.subwoofer_device != device {
                     self.settings.subwoofer_device = device;
-                    self.mark_settings_dirty();
+                    self.push_subwoofer();
                     self.apply(Action::RestartEngine, ctx);
                 }
             }
@@ -13765,6 +13797,7 @@ impl App {
                     self.applied_proxy.clone(),
                     std::sync::Arc::clone(&self.winamp.tap),
                     std::sync::Arc::clone(&self.winamp.eq),
+                    std::sync::Arc::clone(&self.subwoofer),
                 );
                 self.backend.send(Command::RestartEngine(config));
                 if self.local_ready {
@@ -15318,6 +15351,7 @@ pub fn engine_config(
     proxy: crate::settings::ProxyConfig,
     tap: std::sync::Arc<crate::vis::AudioTap>,
     eq: crate::eq::SharedEq,
+    subwoofer: crate::sink::SharedSubwoofer,
 ) -> EngineConfig {
     EngineConfig {
         tap,
@@ -15332,16 +15366,7 @@ pub fn engine_config(
             .audio_device
             .clone()
             .filter(|device| !device.trim().is_empty()),
-        subwoofer: crate::sink::SubwooferConfig {
-            enabled: settings.subwoofer_enabled,
-            device: settings
-                .subwoofer_device
-                .clone()
-                .filter(|device| !device.trim().is_empty()),
-            cutoff_hz: settings.subwoofer_cutoff_hz,
-            gain_db: settings.subwoofer_gain_db,
-            delay_ms: settings.subwoofer_delay_ms,
-        },
+        subwoofer,
         initial_volume: settings.volume,
         volume_dir: dirs.volume_dir(),
         audio_cache_dir: settings.audio_cache.then(|| dirs.audio_cache_dir()),

@@ -2441,6 +2441,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     .changed()
                     {
                         changed = true;
+                        app.push_subwoofer();
                         app.actions.push(Action::RestartEngine);
                     }
                 },
@@ -2513,8 +2514,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         .changed()
                         {
                             app.settings.subwoofer_cutoff_hz = cutoff;
+                            app.push_subwoofer();
                             changed = true;
-                            playback_dirty = true;
                         }
                     },
                 );
@@ -2537,8 +2538,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         .changed()
                         {
                             app.settings.subwoofer_gain_db = gain;
+                            app.push_subwoofer();
                             changed = true;
-                            playback_dirty = true;
                         }
                     },
                 );
@@ -2561,8 +2562,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         .changed()
                         {
                             app.settings.subwoofer_delay_ms = delay;
+                            app.push_subwoofer();
                             changed = true;
-                            playback_dirty = true;
                         }
                     },
                 );

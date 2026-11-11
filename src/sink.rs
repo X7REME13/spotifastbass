@@ -494,12 +494,19 @@ impl Default for SubwooferConfig {
     }
 }
 
+pub type SharedSubwoofer = Arc<Mutex<SubwooferConfig>>;
+
+pub fn shared_subwoofer(config: SubwooferConfig) -> SharedSubwoofer {
+    Arc::new(Mutex::new(config))
+}
+
 pub struct RodioSink {
     /// The output device from Settings, an id or an older build's name
     /// (see [`Saved`]); `None` means the default.
     device: Option<String>,
     output: Option<Output>,
     subwoofer_config: SubwooferConfig,
+    subwoofer_shared: SharedSubwoofer,
     subwoofer_output: Option<Output>,
     subwoofer_dsp: crate::eq::SubwooferDsp,
     on_error: ErrorHook,
@@ -741,6 +748,7 @@ impl RodioSink {
             device,
             output: None,
             subwoofer_config: SubwooferConfig::default(),
+            subwoofer_shared: shared_subwoofer(SubwooferConfig::default()),
             subwoofer_output: None,
             subwoofer_dsp: crate::eq::SubwooferDsp::default(),
             on_error,
@@ -753,8 +761,9 @@ impl RodioSink {
         }
     }
 
-    /// Attaches subwoofer configuration to this sink.
-    pub fn with_subwoofer(mut self, config: SubwooferConfig) -> Self {
+    /// Attaches shared subwoofer configuration to this sink for real-time parameter sync.
+    pub fn with_subwoofer(mut self, shared: SharedSubwoofer) -> Self {
+        let config = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
         self.subwoofer_dsp = crate::eq::SubwooferDsp::new(
             config.cutoff_hz,
             config.gain_db,
@@ -762,6 +771,7 @@ impl RodioSink {
             SAMPLE_RATE,
         );
         self.subwoofer_config = config;
+        self.subwoofer_shared = shared;
         self
     }
 
@@ -929,6 +939,32 @@ impl Sink for RodioSink {
             thread::sleep(Duration::from_secs_f64(frames as f64 / SAMPLE_RATE as f64));
             return Ok(());
         }
+        // Sync real-time subwoofer parameter changes from UI
+        if let Ok(shared) = self.subwoofer_shared.lock() {
+            let wanted = shared.clone();
+            if (wanted.cutoff_hz - self.subwoofer_config.cutoff_hz).abs() > 0.01 {
+                self.subwoofer_dsp.set_cutoff(wanted.cutoff_hz);
+                self.subwoofer_config.cutoff_hz = wanted.cutoff_hz;
+            }
+            if (wanted.gain_db - self.subwoofer_config.gain_db).abs() > 0.01 {
+                self.subwoofer_dsp.set_gain_db(wanted.gain_db);
+                self.subwoofer_config.gain_db = wanted.gain_db;
+            }
+            if (wanted.delay_ms - self.subwoofer_config.delay_ms).abs() > 0.01 {
+                self.subwoofer_dsp.set_delay_ms(wanted.delay_ms);
+                self.subwoofer_config.delay_ms = wanted.delay_ms;
+            }
+            if wanted.enabled != self.subwoofer_config.enabled
+                || wanted.device != self.subwoofer_config.device
+            {
+                self.subwoofer_config.enabled = wanted.enabled;
+                self.subwoofer_config.device = wanted.device;
+                self.subwoofer_output = None;
+                self.subwoofer_dsp.reset();
+                self.applied_volume = -1.0;
+            }
+        }
+
         let samples = converter.f64_to_f32(samples);
         // Sound arriving without a Play first still has a device to go to.
         self.ensure_open()?;

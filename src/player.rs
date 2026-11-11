@@ -54,7 +54,7 @@ pub struct EngineConfig {
     /// The saved output, an id or an older build's name (`crate::sink::Saved`).
     pub audio_device: Option<String>,
     /// Secondary subwoofer stream configuration (dual output + low-pass filter).
-    pub subwoofer: crate::sink::SubwooferConfig,
+    pub subwoofer: crate::sink::SharedSubwoofer,
     pub initial_volume: u16,
     pub volume_dir: PathBuf,
     pub audio_cache_dir: Option<PathBuf>,
@@ -2036,7 +2036,7 @@ mod tests {
             autoplay: true,
             gapless: true,
             audio_device: None,
-            subwoofer: crate::sink::SubwooferConfig::default(),
+            subwoofer: crate::sink::shared_subwoofer(crate::sink::SubwooferConfig::default()),
             initial_volume: 1,
             volume_dir: PathBuf::new(),
             audio_cache_dir: None,
