@@ -2473,7 +2473,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             .show_ui(ui, |ui| {
                                 let default_label = gettext(locale, "System default");
                                 if ui
-                                    .selectable_label(current_sub.is_none(), &default_label)
+                                    .selectable_label(current_sub.is_none(), default_label.as_ref())
                                     .clicked()
                                     && current_sub.is_some()
                                 {
@@ -2509,7 +2509,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             40.0..=200.0,
                             |slider| slider.step_by(5.0),
                             |value| value.suffix(" Hz"),
-                        ) {
+                        )
+                        .changed()
+                        {
                             app.settings.subwoofer_cutoff_hz = cutoff;
                             changed = true;
                             playback_dirty = true;
@@ -2531,7 +2533,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             -12.0..=12.0,
                             |slider| slider.step_by(0.5),
                             |value| value.suffix(" dB"),
-                        ) {
+                        )
+                        .changed()
+                        {
                             app.settings.subwoofer_gain_db = gain;
                             changed = true;
                             playback_dirty = true;
@@ -2553,7 +2557,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             0.0..=30.0,
                             |slider| slider.step_by(0.5),
                             |value| value.suffix(" ms"),
-                        ) {
+                        )
+                        .changed()
+                        {
                             app.settings.subwoofer_delay_ms = delay;
                             changed = true;
                             playback_dirty = true;

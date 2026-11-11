@@ -821,7 +821,7 @@ impl RodioSink {
                         self.buffer_ms,
                         &self.control,
                     ) {
-                        Ok(mut sub) => {
+                        Ok(sub) => {
                             self.control
                                 .register_subwoofer(&sub.sink, Arc::clone(&sub.envelope));
                             log::info!(
