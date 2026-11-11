@@ -287,13 +287,13 @@ pub struct Settings {
     /// Dedicated audio device for subwoofer output (e.g. Jazz Acoustic USB DAC).
     #[serde(default)]
     pub subwoofer_device: Option<String>,
-    /// Low-pass filter cutoff frequency in Hz (typically 40.0 to 200.0, default 80.0).
+    /// Low-pass filter cutoff frequency in Hz (20.0 to 1000.0, default 80.0).
     #[serde(default = "default_subwoofer_cutoff_hz")]
     pub subwoofer_cutoff_hz: f32,
-    /// Subwoofer volume trim in decibels (-24.0 to +24.0, default 0.0).
+    /// Subwoofer volume trim in decibels (-30.0 to +30.0, default 0.0).
     #[serde(default)]
     pub subwoofer_gain_db: f32,
-    /// Subwoofer delay offset in milliseconds for acoustic distance alignment (-50.0 to 50.0, default 0.0).
+    /// Subwoofer delay offset in milliseconds for acoustic distance alignment (0.0 to 500.0, default 0.0).
     #[serde(default)]
     pub subwoofer_delay_ms: f32,
     pub audio_cache: bool,

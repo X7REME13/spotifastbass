@@ -2507,7 +2507,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             ui,
                             &palette,
                             &mut cutoff,
-                            40.0..=200.0,
+                            20.0..=1000.0,
                             |slider| slider.step_by(5.0),
                             |value| value.suffix(" Hz"),
                         )
@@ -2531,7 +2531,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             ui,
                             &palette,
                             &mut gain,
-                            -12.0..=12.0,
+                            -30.0..=30.0,
                             |slider| slider.step_by(0.5),
                             |value| value.suffix(" dB"),
                         )
@@ -2555,8 +2555,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             ui,
                             &palette,
                             &mut delay,
-                            0.0..=30.0,
-                            |slider| slider.step_by(0.5),
+                            0.0..=500.0,
+                            |slider| slider.step_by(1.0),
                             |value| value.suffix(" ms"),
                         )
                         .changed()

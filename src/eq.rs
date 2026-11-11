@@ -477,16 +477,17 @@ impl SubwooferDsp {
     /// Creates a new subwoofer processor at `sample_rate`.
     pub fn new(cutoff_hz: f32, gain_db: f32, delay_ms: f32, sample_rate: u32) -> Self {
         let sample_rate_f = f64::from(sample_rate.max(1));
-        let cutoff = f64::from(cutoff_hz).clamp(20.0, 500.0);
+        let cutoff = f64::from(cutoff_hz).clamp(20.0, 1000.0);
         let q = std::f64::consts::FRAC_1_SQRT_2;
         let s1 = Biquad::lowpass(cutoff, q, sample_rate_f);
         let s2 = Biquad::lowpass(cutoff, q, sample_rate_f);
-        let delay_samples = (delay_ms.max(0.0) as f64 * sample_rate_f / 1000.0).round() as usize;
+        let delay_samples = (delay_ms.clamp(0.0, 500.0) as f64 * sample_rate_f / 1000.0).round() as usize;
         let delay_buffer = if delay_samples > 0 {
             vec![0.0f32; delay_samples]
         } else {
             Vec::new()
         };
+        let gain_db = gain_db.clamp(-30.0, 30.0);
         let gain_linear = 10.0f32.powf(gain_db / 20.0);
         Self {
             sample_rate: sample_rate_f,
@@ -509,7 +510,7 @@ impl SubwooferDsp {
     }
 
     pub fn set_cutoff(&mut self, cutoff_hz: f32) {
-        let cutoff = f64::from(cutoff_hz).clamp(20.0, 500.0);
+        let cutoff = f64::from(cutoff_hz).clamp(20.0, 1000.0);
         if (cutoff - self.cutoff_hz).abs() > 0.01 {
             self.cutoff_hz = cutoff;
             let q = std::f64::consts::FRAC_1_SQRT_2;
@@ -529,12 +530,12 @@ impl SubwooferDsp {
     }
 
     pub fn set_gain_db(&mut self, gain_db: f32) {
-        self.gain_db = gain_db.clamp(-24.0, 24.0);
+        self.gain_db = gain_db.clamp(-30.0, 30.0);
         self.gain_linear = 10.0f32.powf(self.gain_db / 20.0);
     }
 
     pub fn set_delay_ms(&mut self, delay_ms: f32) {
-        let new_samples = (delay_ms.max(0.0) as f64 * self.sample_rate / 1000.0).round() as usize;
+        let new_samples = (delay_ms.clamp(0.0, 500.0) as f64 * self.sample_rate / 1000.0).round() as usize;
         if new_samples != self.delay_samples {
             self.delay_samples = new_samples;
             self.delay_buffer = if new_samples > 0 {
