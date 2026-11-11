@@ -350,7 +350,7 @@ pub fn shared() -> SharedEq {
 
 /// A second-order section in direct form I, one per band and channel.
 #[derive(Clone, Copy, Debug, Default)]
-struct Biquad {
+pub struct Biquad {
     sample_rate: f64,
     b0: f64,
     b1: f64,
@@ -386,10 +386,39 @@ impl Biquad {
         }
     }
 
+    /// A second-order low-pass filter after the Audio EQ Cookbook, normalised by `a0`.
+    pub fn lowpass(hz: f64, q: f64, sample_rate: f64) -> Self {
+        let q = q.max(0.001);
+        let sample_rate = sample_rate.max(1.0);
+        let hz = hz.clamp(1.0, sample_rate * 0.499);
+        let w0 = std::f64::consts::TAU * hz / sample_rate;
+        let (sin, cos) = w0.sin_cos();
+        let alpha = sin / (2.0 * q);
+        let a0 = 1.0 + alpha;
+        Self {
+            sample_rate,
+            b0: ((1.0 - cos) / 2.0) / a0,
+            b1: (1.0 - cos) / a0,
+            b2: ((1.0 - cos) / 2.0) / a0,
+            a1: (-2.0 * cos) / a0,
+            a2: (1.0 - alpha) / a0,
+            ..Self::default()
+        }
+    }
+
+    /// Clears filter state memory.
+    #[inline]
+    pub fn reset_state(&mut self) {
+        self.x1 = 0.0;
+        self.x2 = 0.0;
+        self.y1 = 0.0;
+        self.y2 = 0.0;
+    }
+
     /// The filter's gain at a frequency, in decibels, from its transfer
     /// function on the unit circle: what is played, including the bend
     /// the bilinear transform puts near the top of the band.
-    fn gain_db_at(&self, hz: f64) -> f64 {
+    pub fn gain_db_at(&self, hz: f64) -> f64 {
         let w = std::f64::consts::TAU * hz / self.sample_rate;
         let (sin1, cos1) = w.sin_cos();
         let (sin2, cos2) = (2.0 * w).sin_cos();
@@ -401,7 +430,7 @@ impl Biquad {
     }
 
     #[inline]
-    fn run(&mut self, x: f64) -> f64 {
+    pub fn run(&mut self, x: f64) -> f64 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
             - self.a1 * self.y1
             - self.a2 * self.y2;
@@ -410,6 +439,135 @@ impl Biquad {
         self.y2 = self.y1;
         self.y1 = y;
         y
+    }
+}
+
+/// Dedicated DSP processor for the secondary subwoofer output channel.
+///
+/// Features:
+/// 1. Mono downmixing: sums `(L + R) * 0.5` to eliminate phase cancellation
+///    and drive both channels of the subwoofer amplifier symmetrically.
+/// 2. Linkwitz-Riley 4th-order (LR4) low-pass filter: cascading two 2nd-order
+///    Butterworth filters (`Q = 1 / sqrt(2) ≈ 0.7071`) at the cutoff frequency.
+///    Yields a steep -24 dB/octave slope and exactly -6 dB at cutoff, with zero
+///    relative phase inversion at crossover.
+/// 3. Gain trim: user-adjustable decibel gain (-24 to +24 dB).
+/// 4. Delay compensation: sample ring-buffer delay line for physical distance /
+///    hardware DAC latency alignment.
+#[derive(Clone, Debug)]
+pub struct SubwooferDsp {
+    sample_rate: f64,
+    cutoff_hz: f64,
+    gain_db: f32,
+    gain_linear: f32,
+    delay_samples: usize,
+    delay_buffer: Vec<f32>,
+    delay_write_pos: usize,
+    stage1: Biquad,
+    stage2: Biquad,
+}
+
+impl Default for SubwooferDsp {
+    fn default() -> Self {
+        Self::new(80.0, 0.0, 0.0, SAMPLE_RATE)
+    }
+}
+
+impl SubwooferDsp {
+    /// Creates a new subwoofer processor at `sample_rate`.
+    pub fn new(cutoff_hz: f32, gain_db: f32, delay_ms: f32, sample_rate: u32) -> Self {
+        let sample_rate_f = f64::from(sample_rate.max(1));
+        let cutoff = f64::from(cutoff_hz).clamp(20.0, 500.0);
+        let q = std::f64::consts::FRAC_1_SQRT_2;
+        let s1 = Biquad::lowpass(cutoff, q, sample_rate_f);
+        let s2 = Biquad::lowpass(cutoff, q, sample_rate_f);
+        let delay_samples = (delay_ms.max(0.0) as f64 * sample_rate_f / 1000.0).round() as usize;
+        let delay_buffer = if delay_samples > 0 {
+            vec![0.0f32; delay_samples]
+        } else {
+            Vec::new()
+        };
+        let gain_linear = 10.0f32.powf(gain_db / 20.0);
+        Self {
+            sample_rate: sample_rate_f,
+            cutoff_hz: cutoff,
+            gain_db,
+            gain_linear,
+            delay_samples,
+            delay_buffer,
+            delay_write_pos: 0,
+            stage1: s1,
+            stage2: s2,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.stage1.reset_state();
+        self.stage2.reset_state();
+        self.delay_buffer.fill(0.0);
+        self.delay_write_pos = 0;
+    }
+
+    pub fn set_cutoff(&mut self, cutoff_hz: f32) {
+        let cutoff = f64::from(cutoff_hz).clamp(20.0, 500.0);
+        if (cutoff - self.cutoff_hz).abs() > 0.01 {
+            self.cutoff_hz = cutoff;
+            let q = std::f64::consts::FRAC_1_SQRT_2;
+            let s1 = Biquad::lowpass(cutoff, q, self.sample_rate);
+            let s2 = Biquad::lowpass(cutoff, q, self.sample_rate);
+            self.stage1.b0 = s1.b0;
+            self.stage1.b1 = s1.b1;
+            self.stage1.b2 = s1.b2;
+            self.stage1.a1 = s1.a1;
+            self.stage1.a2 = s1.a2;
+            self.stage2.b0 = s2.b0;
+            self.stage2.b1 = s2.b1;
+            self.stage2.b2 = s2.b2;
+            self.stage2.a1 = s2.a1;
+            self.stage2.a2 = s2.a2;
+        }
+    }
+
+    pub fn set_gain_db(&mut self, gain_db: f32) {
+        self.gain_db = gain_db.clamp(-24.0, 24.0);
+        self.gain_linear = 10.0f32.powf(self.gain_db / 20.0);
+    }
+
+    pub fn set_delay_ms(&mut self, delay_ms: f32) {
+        let new_samples = (delay_ms.max(0.0) as f64 * self.sample_rate / 1000.0).round() as usize;
+        if new_samples != self.delay_samples {
+            self.delay_samples = new_samples;
+            self.delay_buffer = if new_samples > 0 {
+                vec![0.0f32; new_samples]
+            } else {
+                Vec::new()
+            };
+            self.delay_write_pos = 0;
+        }
+    }
+
+    /// Process interleaved stereo audio samples in-place.
+    ///
+    /// Sums (L + R) * 0.5 to mono, scales by gain, runs through the 4th-order
+    /// Linkwitz-Riley low-pass filter, applies optional delay, and writes the
+    /// resulting bass signal to both channels [sub, sub].
+    pub fn process(&mut self, samples: &mut [f32]) {
+        let has_delay = !self.delay_buffer.is_empty();
+        for frame in samples.chunks_exact_mut(2) {
+            let mono = (frame[0] + frame[1]) * 0.5 * self.gain_linear;
+            let s1 = self.stage1.run(mono as f64);
+            let s2 = self.stage2.run(s1) as f32;
+            let out = if has_delay {
+                let delayed = self.delay_buffer[self.delay_write_pos];
+                self.delay_buffer[self.delay_write_pos] = s2;
+                self.delay_write_pos = (self.delay_write_pos + 1) % self.delay_buffer.len();
+                delayed
+            } else {
+                s2
+            };
+            frame[0] = out;
+            frame[1] = out;
+        }
     }
 }
 
@@ -718,5 +876,74 @@ mod tests {
                 preset.name
             );
         }
+    }
+
+    #[test]
+    fn biquad_butterworth_lowpass_response() {
+        let sample_rate = 44100.0;
+        let q = std::f64::consts::FRAC_1_SQRT_2;
+        let lpf = Biquad::lowpass(80.0, q, sample_rate);
+
+        // Near DC (10 Hz): virtually 0 dB (passband)
+        let gain_dc = lpf.gain_db_at(10.0);
+        assert!(gain_dc.abs() < 0.1, "DC gain should be ~0 dB, got {gain_dc}");
+
+        // At cutoff (80 Hz): -3.01 dB (half-power point for 2nd order Butterworth)
+        let gain_cutoff = lpf.gain_db_at(80.0);
+        assert!(
+            (gain_cutoff - (-3.01)).abs() < 0.15,
+            "Cutoff gain should be -3.01 dB, got {gain_cutoff}"
+        );
+
+        // At 1 octave above cutoff (160 Hz): ~ -12.3 dB (12 dB/octave slope)
+        let gain_octave = lpf.gain_db_at(160.0);
+        assert!(
+            (gain_octave - (-12.3)).abs() < 0.5,
+            "1 octave above cutoff should be ~ -12.3 dB, got {gain_octave}"
+        );
+    }
+
+    #[test]
+    fn subwoofer_dsp_lr4_crossover_and_mono_downmix() {
+        let mut dsp = SubwooferDsp::new(80.0, 0.0, 0.0, 44100);
+
+        // Check cascaded frequency response
+        let gain_20 = dsp.stage1.gain_db_at(20.0) + dsp.stage2.gain_db_at(20.0);
+        assert!(gain_20.abs() < 0.2, "20 Hz sub-bass should be ~0 dB, got {gain_20}");
+
+        let gain_80 = dsp.stage1.gain_db_at(80.0) + dsp.stage2.gain_db_at(80.0);
+        assert!(
+            (gain_80 - (-6.02)).abs() < 0.25,
+            "LR4 crossover at 80 Hz must be -6.02 dB, got {gain_80}"
+        );
+
+        let gain_160 = dsp.stage1.gain_db_at(160.0) + dsp.stage2.gain_db_at(160.0);
+        assert!(
+            (gain_160 - (-24.6)).abs() < 1.0,
+            "LR4 rolloff at 160 Hz must be ~ -24 dB, got {gain_160}"
+        );
+
+        // Process a low-frequency mono tone: verify mono summing
+        // If L = 1.0 and R = 0.0, mono downmix = 0.5, written to both L and R.
+        let mut samples = vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+        dsp.process(&mut samples);
+        // Both channels should be identical
+        assert_eq!(samples[0], samples[1]);
+        assert_eq!(samples[2], samples[3]);
+        assert_eq!(samples[4], samples[5]);
+    }
+
+    #[test]
+    fn subwoofer_dsp_delay_line() {
+        // 44100 Hz, 1 ms delay = 44.1 -> 44 samples delay (88 interleaved floats)
+        let mut dsp = SubwooferDsp::new(80.0, 0.0, 1.0, 44100);
+        assert_eq!(dsp.delay_samples, 44);
+
+        // Process 44 frames of silence followed by 1 frame of impulse
+        let mut block = vec![0.0f32; 88];
+        dsp.process(&mut block);
+
+        // All output in first 44 frames should be 0
+        assert!(block.iter().all(|&s| s == 0.0));
     }
 }

@@ -281,6 +281,21 @@ pub struct Settings {
     /// See [`crate::sink::DEFAULT_BUFFER_MS`].
     #[serde(default = "default_buffer_ms")]
     pub audio_buffer_ms: u32,
+    /// Whether dual-output subwoofer routing is enabled.
+    #[serde(default)]
+    pub subwoofer_enabled: bool,
+    /// Dedicated audio device for subwoofer output (e.g. Jazz Acoustic USB DAC).
+    #[serde(default)]
+    pub subwoofer_device: Option<String>,
+    /// Low-pass filter cutoff frequency in Hz (typically 40.0 to 200.0, default 80.0).
+    #[serde(default = "default_subwoofer_cutoff_hz")]
+    pub subwoofer_cutoff_hz: f32,
+    /// Subwoofer volume trim in decibels (-24.0 to +24.0, default 0.0).
+    #[serde(default)]
+    pub subwoofer_gain_db: f32,
+    /// Subwoofer delay offset in milliseconds for acoustic distance alignment (-50.0 to 50.0, default 0.0).
+    #[serde(default)]
+    pub subwoofer_delay_ms: f32,
     pub audio_cache: bool,
     pub audio_cache_mb: u64,
     /// The folder, searched with its subfolders, that a playlist's
@@ -496,6 +511,11 @@ impl Default for Settings {
             autoplay: true,
             gapless: true,
             audio_device: None,
+            subwoofer_enabled: false,
+            subwoofer_device: None,
+            subwoofer_cutoff_hz: default_subwoofer_cutoff_hz(),
+            subwoofer_gain_db: 0.0,
+            subwoofer_delay_ms: 0.0,
             local_files_folder: None,
             audio_buffer_ms: default_buffer_ms(),
             audio_cache: true,
@@ -584,6 +604,10 @@ impl Default for Settings {
 
 fn default_buffer_ms() -> u32 {
     crate::sink::DEFAULT_BUFFER_MS
+}
+
+fn default_subwoofer_cutoff_hz() -> f32 {
+    80.0
 }
 
 impl Settings {

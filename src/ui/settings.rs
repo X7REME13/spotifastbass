@@ -2387,6 +2387,183 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         });
     }
 
+    let subwoofer = gettext(locale, "Subwoofer (Dual Output)");
+    let subwoofer_rows = [
+        RowText::new(
+            gettext(locale, "Dual output subwoofer"),
+            gettext(
+                locale,
+                "Route low frequencies to a secondary amplifier (e.g. Jazz Acoustic) while keeping mains full-range.",
+            ),
+        ),
+        RowText::new(
+            gettext(locale, "Subwoofer device"),
+            gettext(
+                locale,
+                "The target audio output device for the low-passed subwoofer stream.",
+            ),
+        ),
+        RowText::new(
+            gettext(locale, "Crossover frequency (LPF)"),
+            gettext(
+                locale,
+                "Linkwitz-Riley 4th-order (24 dB/oct) low-pass cutoff filter.",
+            ),
+        ),
+        RowText::new(
+            gettext(locale, "Subwoofer gain trim"),
+            gettext(locale, "Level trim for the subwoofer amplifier in decibels."),
+        ),
+        RowText::new(
+            gettext(locale, "Delay compensation"),
+            gettext(
+                locale,
+                "Buffer delay compensation for acoustic distance and phase alignment.",
+            ),
+        ),
+    ];
+    if section_matches(&needle, &subwoofer, &subwoofer_rows) {
+        any_visible = true;
+        section(ui, &palette, &subwoofer, |ui| {
+            filtered_row(
+                ui,
+                &palette,
+                &needle,
+                &subwoofer,
+                &subwoofer_rows[0],
+                |ui| {
+                    if widgets::switch(
+                        ui,
+                        &palette,
+                        &subwoofer,
+                        &mut app.settings.subwoofer_enabled,
+                    )
+                    .changed()
+                    {
+                        changed = true;
+                        app.actions.push(Action::RestartEngine);
+                    }
+                },
+            );
+            if app.settings.subwoofer_enabled {
+                filtered_row(
+                    ui,
+                    &palette,
+                    &needle,
+                    &subwoofer,
+                    &subwoofer_rows[1],
+                    |ui| {
+                        if matches!(app.output_devices, crate::model::Loadable::NotLoaded) {
+                            app.actions.push(Action::ListOutputDevices);
+                        }
+                        let current_sub = app.settings.subwoofer_device.clone();
+                        let listed = app.output_devices.get().map_or(&[][..], Vec::as_slice);
+                        let sub_display_name = current_sub.as_deref().map_or_else(
+                            || gettext(locale, "System default").into_owned(),
+                            |id| {
+                                listed
+                                    .iter()
+                                    .find(|d| d.id.as_str() == id || d.name == id)
+                                    .map_or_else(|| id.to_string(), |d| d.name.clone())
+                            },
+                        );
+                        egui::ComboBox::from_id_salt("subwoofer-device-picker")
+                            .selected_text(sub_display_name)
+                            .width(220.0)
+                            .show_ui(ui, |ui| {
+                                let default_label = gettext(locale, "System default");
+                                if ui
+                                    .selectable_label(current_sub.is_none(), &default_label)
+                                    .clicked()
+                                    && current_sub.is_some()
+                                {
+                                    app.actions.push(Action::SetSubwooferDevice(None));
+                                }
+                                for dev in listed {
+                                    let is_selected = current_sub
+                                        .as_deref()
+                                        .is_some_and(|s| s == dev.id.as_str() || s == dev.name);
+                                    if ui.selectable_label(is_selected, &dev.name).clicked()
+                                        && !is_selected
+                                    {
+                                        app.actions.push(Action::SetSubwooferDevice(Some(
+                                            dev.id.as_str().to_string(),
+                                        )));
+                                    }
+                                }
+                            });
+                    },
+                );
+                filtered_row(
+                    ui,
+                    &palette,
+                    &needle,
+                    &subwoofer,
+                    &subwoofer_rows[2],
+                    |ui| {
+                        let mut cutoff = app.settings.subwoofer_cutoff_hz;
+                        if setting_slider(
+                            ui,
+                            &palette,
+                            &mut cutoff,
+                            40.0..=200.0,
+                            |slider| slider.step_by(5.0),
+                            |value| value.suffix(" Hz"),
+                        ) {
+                            app.settings.subwoofer_cutoff_hz = cutoff;
+                            changed = true;
+                            playback_dirty = true;
+                        }
+                    },
+                );
+                filtered_row(
+                    ui,
+                    &palette,
+                    &needle,
+                    &subwoofer,
+                    &subwoofer_rows[3],
+                    |ui| {
+                        let mut gain = app.settings.subwoofer_gain_db;
+                        if setting_slider(
+                            ui,
+                            &palette,
+                            &mut gain,
+                            -12.0..=12.0,
+                            |slider| slider.step_by(0.5),
+                            |value| value.suffix(" dB"),
+                        ) {
+                            app.settings.subwoofer_gain_db = gain;
+                            changed = true;
+                            playback_dirty = true;
+                        }
+                    },
+                );
+                filtered_row(
+                    ui,
+                    &palette,
+                    &needle,
+                    &subwoofer,
+                    &subwoofer_rows[4],
+                    |ui| {
+                        let mut delay = app.settings.subwoofer_delay_ms;
+                        if setting_slider(
+                            ui,
+                            &palette,
+                            &mut delay,
+                            0.0..=30.0,
+                            |slider| slider.step_by(0.5),
+                            |value| value.suffix(" ms"),
+                        ) {
+                            app.settings.subwoofer_delay_ms = delay;
+                            changed = true;
+                            playback_dirty = true;
+                        }
+                    },
+                );
+            }
+        });
+    }
+
     let storage = gettext(locale, "Storage");
     let mut storage_rows = [
         RowText::new(

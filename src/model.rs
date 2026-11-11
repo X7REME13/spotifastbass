@@ -1293,6 +1293,8 @@ pub enum Action {
     SetStartWithComputer(Option<fastframe_autostart::Start>),
     /// Play through this output, by name; `None` is the system default.
     SetAudioDevice(Option<String>),
+    /// Play secondary subwoofer through this output, by id or name; `None` is the system default.
+    SetSubwooferDevice(Option<String>),
     /// Empty Next up of its queued songs, keeping the context's own.
     ClearQueue,
     /// Save the current and upcoming queue as a playlist.

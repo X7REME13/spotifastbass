@@ -109,6 +109,8 @@ pub struct AudioControl {
 struct AudioTarget {
     sink: Weak<rodio::Sink>,
     envelope: Option<Arc<Envelope>>,
+    sub_sink: Weak<rodio::Sink>,
+    sub_envelope: Option<Arc<Envelope>>,
 }
 
 impl AudioControl {
@@ -132,6 +134,9 @@ impl AudioControl {
                 if let Some(sink) = target.sink.upgrade() {
                     sink.stop();
                 }
+                if let Some(sub_sink) = target.sub_sink.upgrade() {
+                    sub_sink.stop();
+                }
                 self.reset_output.store(true, Ordering::SeqCst);
                 self.reset_processing.store(true, Ordering::SeqCst);
                 // Previous can rewind the current track after interrupting
@@ -150,21 +155,32 @@ impl AudioControl {
         if self.waiting_for_track.swap(true, Ordering::SeqCst) {
             return;
         }
-        let (sink, envelope) = {
+        let (sink, envelope, sub_sink, sub_envelope) = {
             let target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
-            (target.sink.upgrade(), target.envelope.clone())
+            (
+                target.sink.upgrade(),
+                target.envelope.clone(),
+                target.sub_sink.upgrade(),
+                target.sub_envelope.clone(),
+            )
         };
-        if let (Some(sink), Some(envelope)) = (&sink, &envelope) {
-            envelope.fade_out();
-            let wait =
-                Duration::from_millis(u64::from(self.buffer_ms)).saturating_add(INTERRUPT_FADE * 2);
-            let deadline = Instant::now() + wait;
-            while !envelope.silent() && Instant::now() < deadline {
-                thread::sleep(Duration::from_millis(1));
-            }
-            // Unlike `clear`, this does not wait for every queued source.
-            // The replacement gets a fresh rodio sink on its first write.
+        if let Some(env) = &envelope {
+            env.fade_out();
+        }
+        if let Some(sub_env) = &sub_envelope {
+            sub_env.fade_out();
+        }
+        let wait =
+            Duration::from_millis(u64::from(self.buffer_ms)).saturating_add(INTERRUPT_FADE * 2);
+        let deadline = Instant::now() + wait;
+        while envelope.as_ref().is_some_and(|e| !e.silent()) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        if let Some(sink) = sink {
             sink.stop();
+        }
+        if let Some(sub_sink) = sub_sink {
+            sub_sink.stop();
         }
         self.reset_output.store(true, Ordering::SeqCst);
         self.reset_processing.store(true, Ordering::SeqCst);
@@ -198,6 +214,12 @@ impl AudioControl {
         let mut target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
         target.sink = Arc::downgrade(sink);
         target.envelope = Some(envelope);
+    }
+
+    pub(crate) fn register_subwoofer(&self, sink: &Arc<rodio::Sink>, envelope: Arc<Envelope>) {
+        let mut target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
+        target.sub_sink = Arc::downgrade(sink);
+        target.sub_envelope = Some(envelope);
     }
 }
 
@@ -450,11 +472,36 @@ impl Source for TransitionSource {
     }
 }
 
+/// Configuration for the secondary low-passed subwoofer output stream.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubwooferConfig {
+    pub enabled: bool,
+    pub device: Option<String>,
+    pub cutoff_hz: f32,
+    pub gain_db: f32,
+    pub delay_ms: f32,
+}
+
+impl Default for SubwooferConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            device: None,
+            cutoff_hz: 80.0,
+            gain_db: 0.0,
+            delay_ms: 0.0,
+        }
+    }
+}
+
 pub struct RodioSink {
     /// The output device from Settings, an id or an older build's name
     /// (see [`Saved`]); `None` means the default.
     device: Option<String>,
     output: Option<Output>,
+    subwoofer_config: SubwooferConfig,
+    subwoofer_output: Option<Output>,
+    subwoofer_dsp: crate::eq::SubwooferDsp,
     on_error: ErrorHook,
     on_device: DeviceHook,
     /// Player volume, applied at output so changes affect queued audio.
@@ -693,6 +740,9 @@ impl RodioSink {
         Self {
             device,
             output: None,
+            subwoofer_config: SubwooferConfig::default(),
+            subwoofer_output: None,
+            subwoofer_dsp: crate::eq::SubwooferDsp::default(),
             on_error,
             on_device: Arc::new(|_, _| {}),
             volume,
@@ -703,6 +753,18 @@ impl RodioSink {
         }
     }
 
+    /// Attaches subwoofer configuration to this sink.
+    pub fn with_subwoofer(mut self, config: SubwooferConfig) -> Self {
+        self.subwoofer_dsp = crate::eq::SubwooferDsp::new(
+            config.cutoff_hz,
+            config.gain_db,
+            config.delay_ms,
+            SAMPLE_RATE,
+        );
+        self.subwoofer_config = config;
+        self
+    }
+
     /// Tells `hook` the id of a device opened by an old saved name.
     pub fn on_device(mut self, hook: DeviceHook) -> Self {
         self.on_device = hook;
@@ -711,10 +773,13 @@ impl RodioSink {
 
     fn apply_volume(&mut self) {
         let factor = self.volume.attenuation_factor() as f32;
-        if let Some(output) = &self.output
-            && factor != self.applied_volume
-        {
-            output.volume.store(factor.to_bits(), Ordering::Relaxed);
+        if factor != self.applied_volume {
+            if let Some(output) = &self.output {
+                output.volume.store(factor.to_bits(), Ordering::Relaxed);
+            }
+            if let Some(sub) = &self.subwoofer_output {
+                sub.volume.store(factor.to_bits(), Ordering::Relaxed);
+            }
             self.applied_volume = factor;
         }
     }
@@ -741,6 +806,37 @@ impl RodioSink {
                 }
                 self.output = Some(output);
                 self.applied_volume = -1.0;
+            }
+        }
+        if self.subwoofer_config.enabled {
+            match &mut self.subwoofer_output {
+                Some(sub) => {
+                    if sub.run(&self.control)? {
+                        self.applied_volume = -1.0;
+                    }
+                }
+                None => {
+                    match (self.open)(
+                        self.subwoofer_config.device.as_deref(),
+                        self.buffer_ms,
+                        &self.control,
+                    ) {
+                        Ok(mut sub) => {
+                            self.control
+                                .register_subwoofer(&sub.sink, Arc::clone(&sub.envelope));
+                            log::info!(
+                                "subwoofer output opened: {} through {}",
+                                sub.device.device_name(),
+                                fastframe_audio::host()
+                            );
+                            self.subwoofer_output = Some(sub);
+                            self.applied_volume = -1.0;
+                        }
+                        Err(err) => {
+                            log::warn!("could not open subwoofer output: {err}");
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -777,11 +873,27 @@ impl Sink for RodioSink {
             output.transport.fade_in();
             output.sink.play();
         }
+        if let Some(sub) = &mut self.subwoofer_output {
+            sub.transport.fade_in();
+            sub.sink.play();
+        }
         Ok(())
     }
 
     /// Never fails: librespot exits the process when a sink cannot stop.
     fn stop(&mut self) -> SinkResult<()> {
+        if let Some(sub) = &mut self.subwoofer_output {
+            sub.transport.fade_out_over(sub.queued.frames());
+            let deadline = Instant::now() + DRAIN_TIMEOUT;
+            while !sub.sink.empty() && !sub.failed() && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(5));
+            }
+            sub.sink.pause();
+            sub.device.pause();
+            sub.transport.close();
+            sub.fed = false;
+            sub.last_write = None;
+        }
         if let Some(output) = &mut self.output {
             // The drain below plays the queue out, so the ramp is cut to
             // what is in it. During steady playback that is the whole
@@ -800,6 +912,7 @@ impl Sink for RodioSink {
             output.fed = false;
             output.last_write = None;
         }
+        self.subwoofer_dsp.reset();
         Ok(())
     }
 
@@ -819,19 +932,33 @@ impl Sink for RodioSink {
         let samples = converter.f64_to_f32(samples);
         // Sound arriving without a Play first still has a device to go to.
         self.ensure_open()?;
-        if self.control.take_reset()
-            && let Some(output) = &mut self.output
-        {
-            let sink = Arc::new(rodio::Sink::connect_new(&output.mixer));
-            let envelope = Envelope::rising(output.sample_rate, INTERRUPT_FADE);
-            self.control.register(&sink, Arc::clone(&envelope));
-            output.sink = sink;
-            output.envelope = envelope;
-            output.queued = Queued::new();
-            output.resampler =
-                Resampler::new(SAMPLE_RATE, output.sample_rate, NUM_CHANNELS as usize);
-            output.fed = false;
-            output.last_write = None;
+        if self.control.take_reset() {
+            if let Some(output) = &mut self.output {
+                let sink = Arc::new(rodio::Sink::connect_new(&output.mixer));
+                let envelope = Envelope::rising(output.sample_rate, INTERRUPT_FADE);
+                self.control.register(&sink, Arc::clone(&envelope));
+                output.sink = sink;
+                output.envelope = envelope;
+                output.queued = Queued::new();
+                output.resampler =
+                    Resampler::new(SAMPLE_RATE, output.sample_rate, NUM_CHANNELS as usize);
+                output.fed = false;
+                output.last_write = None;
+            }
+            if let Some(sub) = &mut self.subwoofer_output {
+                let sink = Arc::new(rodio::Sink::connect_new(&sub.mixer));
+                let envelope = Envelope::rising(sub.sample_rate, INTERRUPT_FADE);
+                self.control
+                    .register_subwoofer(&sink, Arc::clone(&envelope));
+                sub.sink = sink;
+                sub.envelope = envelope;
+                sub.queued = Queued::new();
+                sub.resampler =
+                    Resampler::new(SAMPLE_RATE, sub.sample_rate, NUM_CHANNELS as usize);
+                sub.fed = false;
+                sub.last_write = None;
+            }
+            self.subwoofer_dsp.reset();
             self.applied_volume = -1.0;
         }
         self.apply_volume();
@@ -840,11 +967,61 @@ impl Sink for RodioSink {
                 "the audio output is not open".into(),
             ));
         };
-        let samples = match &mut output.resampler {
+        let now = Instant::now();
+
+        // Feed secondary subwoofer stream with low-pass filtered audio and buffer sync
+        if self.subwoofer_config.enabled && let Some(sub) = &mut self.subwoofer_output {
+            sub.transport.fade_in();
+            let mut sub_samples = samples.clone();
+            self.subwoofer_dsp.process(&mut sub_samples);
+
+            // Real-time closed-loop buffer synchronization
+            let q_primary = output.queued.frames();
+            let q_sub = sub.queued.frames();
+            let delta = q_sub as i64 - q_primary as i64;
+            // Tolerance threshold: ±88 samples (~2 ms at 44.1 kHz)
+            if delta > 88 && sub_samples.len() >= 4 {
+                // Subwoofer queue is accumulating excess frames (subwoofer clock slower):
+                // Drop 1 stereo frame to bring queues back in sync
+                sub_samples.drain(0..NUM_CHANNELS as usize);
+            } else if delta < -88 && sub_samples.len() >= 2 {
+                // Subwoofer queue is running ahead / draining faster (subwoofer clock faster):
+                // Duplicate 1 stereo frame
+                let c0 = sub_samples[0];
+                let c1 = sub_samples[1];
+                sub_samples.insert(0, c1);
+                sub_samples.insert(0, c0);
+            }
+
+            let sub_samples = match &mut sub.resampler {
+                Some(resampler) => resampler.process(&sub_samples),
+                None => sub_samples,
+            };
+            let sub_frames = (sub_samples.len() / NUM_CHANNELS as usize) as u32;
+            let sub_source = rodio::buffer::SamplesBuffer::new(
+                NUM_CHANNELS as rodio::ChannelCount,
+                sub.sample_rate as rodio::SampleRate,
+                sub_samples,
+            );
+            sub.queued
+                .appended
+                .fetch_add(u64::from(sub_frames), Ordering::Relaxed);
+            sub.sink.append(TransitionSource::new(
+                sub_source,
+                Arc::clone(&sub.envelope),
+                Arc::clone(&sub.transport),
+                Arc::clone(&sub.queued),
+                sub_frames,
+            ));
+            sub.fed = true;
+            sub.last_write = Some(now);
+        }
+
+        // Feed primary stream (Kürbis / default)
+        let primary_samples = match &mut output.resampler {
             Some(resampler) => resampler.process(&samples),
             None => samples,
         };
-        let now = Instant::now();
         if output.fed && output.sink.empty() && !output.sink.is_paused() {
             let late_ms = output
                 .last_write
@@ -853,11 +1030,11 @@ impl Sink for RodioSink {
             log::warn!("audio queue ran dry; next packet arrived after {late_ms} ms");
         }
         output.transport.fade_in();
-        let frames = (samples.len() / NUM_CHANNELS as usize) as u32;
+        let frames = (primary_samples.len() / NUM_CHANNELS as usize) as u32;
         let source = rodio::buffer::SamplesBuffer::new(
             NUM_CHANNELS as rodio::ChannelCount,
             output.sample_rate as rodio::SampleRate,
-            samples,
+            primary_samples,
         );
         output
             .queued
@@ -872,15 +1049,10 @@ impl Sink for RodioSink {
         ));
         output.fed = true;
         output.last_write = Some(now);
-        // Let rodio drain a little; without this the whole track would be
-        // decoded into memory at once. A full queue sleeps until rodio has
-        // played `REFILL` of it, then is topped up in one go.
+
+        // Pacing: paced by primary output
         let refill = u64::from(output.sample_rate) * REFILL.as_millis() as u64 / 1_000;
         while queue_is_full(output.queued.frames(), output.sample_rate) {
-            // Headphones that connect, a new default output, a device that
-            // went away or a stream that stopped asking for sound: the
-            // output moves to the one to use now and the music carries on.
-            // Only an output that will not open stops it.
             match output.run(&self.control) {
                 Ok(replaced) if !output.failed() => {
                     if replaced {
@@ -892,6 +1064,9 @@ impl Sink for RodioSink {
                     (self.on_error)(message.clone());
                     return Err(SinkError::OnWrite(message));
                 }
+            }
+            if let Some(sub) = &mut self.subwoofer_output {
+                let _ = sub.run(&self.control);
             }
             if !queue_is_full(output.queued.frames(), output.sample_rate) {
                 break;

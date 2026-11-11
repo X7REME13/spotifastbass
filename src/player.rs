@@ -53,6 +53,8 @@ pub struct EngineConfig {
     pub gapless: bool,
     /// The saved output, an id or an older build's name (`crate::sink::Saved`).
     pub audio_device: Option<String>,
+    /// Secondary subwoofer stream configuration (dual output + low-pass filter).
+    pub subwoofer: crate::sink::SubwooferConfig,
     pub initial_volume: u16,
     pub volume_dir: PathBuf,
     pub audio_cache_dir: Option<PathBuf>,
@@ -1003,6 +1005,7 @@ fn sink_builder(
     audio: Arc<AudioControl>,
 ) -> SinkAndVolume {
     let device = config.audio_device.clone();
+    let subwoofer = config.subwoofer.clone();
     let buffer_ms = config.buffer_ms;
     let tap = Arc::clone(&config.tap);
     let eq = Arc::clone(&config.eq);
@@ -1029,6 +1032,7 @@ fn sink_builder(
         Box::new(move || {
             let sink = Box::new(
                 RodioSink::new(device, report, volume, buffer_ms, Arc::clone(&audio))
+                    .with_subwoofer(subwoofer)
                     .on_device(saved),
             );
             Box::new(Tapped::new(
@@ -2032,6 +2036,7 @@ mod tests {
             autoplay: true,
             gapless: true,
             audio_device: None,
+            subwoofer: crate::sink::SubwooferConfig::default(),
             initial_volume: 1,
             volume_dir: PathBuf::new(),
             audio_cache_dir: None,

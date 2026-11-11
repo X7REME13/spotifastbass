@@ -13675,6 +13675,13 @@ impl App {
                     self.apply(Action::RestartEngine, ctx);
                 }
             }
+            Action::SetSubwooferDevice(device) => {
+                if self.settings.subwoofer_device != device {
+                    self.settings.subwoofer_device = device;
+                    self.mark_settings_dirty();
+                    self.apply(Action::RestartEngine, ctx);
+                }
+            }
             Action::StartSoloistSetup => {
                 self.soloist_setup_optional = self.settings.soloist_enabled
                     && self.soloist_onboarding == crate::settings::SoloistOnboarding::Complete;
@@ -15325,6 +15332,16 @@ pub fn engine_config(
             .audio_device
             .clone()
             .filter(|device| !device.trim().is_empty()),
+        subwoofer: crate::sink::SubwooferConfig {
+            enabled: settings.subwoofer_enabled,
+            device: settings
+                .subwoofer_device
+                .clone()
+                .filter(|device| !device.trim().is_empty()),
+            cutoff_hz: settings.subwoofer_cutoff_hz,
+            gain_db: settings.subwoofer_gain_db,
+            delay_ms: settings.subwoofer_delay_ms,
+        },
         initial_volume: settings.volume,
         volume_dir: dirs.volume_dir(),
         audio_cache_dir: settings.audio_cache.then(|| dirs.audio_cache_dir()),
