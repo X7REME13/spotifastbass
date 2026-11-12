@@ -1,0 +1,24 @@
+11,14,20 // background
+18,24,34 // grid
+0,229,255 // band 0
+0,215,245 // band 1
+0,200,235 // band 2
+0,185,225 // band 3
+0,170,215 // band 4
+0,200,180 // band 5
+0,230,150 // band 6
+0,255,136 // band 7
+60,255,110 // band 8
+120,255,80 // band 9
+180,255,50 // band 10
+230,240,30 // band 11
+255,200,0 // band 12
+255,150,0 // band 13
+255,110,0 // band 14
+255,70,0 // band 15
+0,229,255 // oscilloscope
+0,180,220 // oscilloscope
+0,140,180 // oscilloscope
+255,110,0 // oscilloscope
+255,110,0 // oscilloscope
+255,255,255 // peaks

@@ -1,0 +1,168 @@
+<THEME title="Teku Bassline 30-Bar Pro" author="Spotifast Community" copyright="AcceleRacers Teku">
+<VIEW id="main" width="540" height="240" titleBar="false" backgroundColor="#0b0e14" resizable="false"
+      scriptFile="teku.js" onLoad="boot();">
+  <PLAYER playState_onChange="followPlayer();" currentMedia_onChange="followPlayer();"/>
+  <EQUALIZERSETTINGS id="eq"/>
+
+  <!-- TOP HEADER -->
+  <SUBVIEW id="header" left="0" top="0" width="540" height="30" passThrough="true">
+    <TEXT left="48" top="9" width="160" height="15" fontSize="9" fontStyle="bold" foregroundColor="#00e5ff" value="⚡ TEKU // BASSLINE 30-BAR"/>
+    <TEXT id="statusText" left="210" top="9" width="150" height="15" fontSize="8" foregroundColor="#ff6e00" value="wmpprop:player.status"/>
+
+    <BUTTON id="btnCockpit" left="374" top="6" width="44" height="20" onClick="showPage(0);" upToolTip="Cockpit HUD" image="tab_hud.png"/>
+    <BUTTON id="btnLyrics" left="422" top="6" width="44" height="20" onClick="showPage(1);" upToolTip="Lyrics Telemetry" image="tab_lrc.png"/>
+    <BUTTON id="btnEQ" left="470" top="6" width="44" height="20" onClick="showPage(2);" upToolTip="30-Band Bassline DSP EQ" image="tab_eq.png"/>
+    <BUTTON id="btnClose" left="516" top="6" width="18" height="18" onClick="view.close();" upToolTip="Close" image="w_close.png" hoverImage="w_close_hover.png" downImage="w_close_down.png"/>
+  </SUBVIEW>
+
+  <!-- PAGE 0: COCKPIT HUD -->
+  <SUBVIEW id="cockpitPage" left="0" top="0" width="540" height="240" backgroundImage="bg_hud.png" passThrough="true">
+    <!-- Album Art -->
+    <SUBVIEW id="art" left="20" top="40" width="116" height="116" zIndex="2" backgroundImage="wmpimage_albumart" cursor="hand"/>
+
+    <!-- Track & Artist Telemetry -->
+    <TEXT id="title" left="150" top="40" width="370" height="16" fontSize="10" fontStyle="bold" foregroundColor="#ffffff"
+          scrollingAmount="1" scrollingDelay="40" value="wmpprop:player.currentMedia.name"/>
+    <TEXT id="artist" left="150" top="54" width="370" height="14" fontSize="8" foregroundColor="#8b949e"
+          scrollingAmount="1" scrollingDelay="40" value="wmpprop:player.currentMedia.author"/>
+
+    <!-- Dual-Tier Real-Time Lyrics -->
+    <TEXT id="lyricsActive" left="152" top="66" width="364" height="18" fontSize="10" fontStyle="bold" foregroundColor="#00e5ff"
+          scrollingAmount="1" scrollingDelay="30" value="wmpprop:player.currentLyrics"/>
+    <TEXT id="lyricsNext" left="152" top="82" width="364" height="14" fontSize="8" foregroundColor="#ff6e00"
+          scrollingAmount="1" scrollingDelay="35" value="wmpprop:player.nextLyrics"/>
+
+    <!-- 30-Bar RTA Spectrum Visualizer -->
+    <EFFECTS id="fxRTA" left="146" top="90" width="374" height="66" zIndex="5" onClick="next();" upToolTip="30-Bar Audio Spectrum"/>
+
+    <!-- Seek Bar & Timing -->
+    <TEXT id="timeCurrent" left="20" top="176" width="40" height="14" fontSize="8" foregroundColor="#00e5ff"
+          value="wmpprop:player.controls.currentPositionString"/>
+    <SEEKSLIDER id="seek" left="64" top="178" width="410" height="10" backgroundImage="seek_back.png"
+                foregroundImage="seek_fill.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png" cursor="hand"/>
+    <TEXT id="timeTotal" left="480" top="176" width="44" height="14" fontSize="8" foregroundColor="#8b949e"
+          value="wmpprop:player.currentMedia.durationString"/>
+
+    <!-- Transport Buttons -->
+    <PREVBUTTON id="prev" left="20" top="198" image="prev.png" hoverImage="prev_hover.png" downImage="prev_down.png"/>
+    <PLAYBUTTON id="play" left="54" top="196" image="play.png" hoverImage="play_hover.png" downImage="play_down.png"/>
+    <PAUSEBUTTON id="pause" left="54" top="196" visible="false" image="pause.png" hoverImage="pause_hover.png" downImage="pause_down.png"/>
+    <NEXTBUTTON id="next" left="94" top="198" image="next.png" hoverImage="next_hover.png" downImage="next_down.png"/>
+
+    <!-- Volume Throttle -->
+    <MUTEBUTTON id="mute" left="374" top="200" image="speaker.png" hoverImage="speaker_hover.png"/>
+    <VOLUMESLIDER id="volume" left="402" top="204" width="118" height="10" backgroundImage="volume_back.png"
+                  foregroundImage="volume_fill.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png" cursor="hand"/>
+  </SUBVIEW>
+
+  <!-- PAGE 1: FULL LYRICS -->
+  <SUBVIEW id="lyricsPage" left="0" top="0" width="540" height="240" visible="false" backgroundImage="bg_lyrics.png" passThrough="true">
+    <TEXT left="24" top="38" width="220" height="18" fontSize="10" fontStyle="bold" foregroundColor="#00e5ff" value="LYRICS TELEMETRY MATRIX"/>
+    <TEXT id="fullLyrics" left="24" top="60" width="492" height="140" fontSize="9" foregroundColor="#f0f6fc"
+          wordWrap="true" value="wmpprop:player.allLyrics"/>
+  </SUBVIEW>
+
+  <!-- PAGE 2: 30-BAND DSP EQUALIZER -->
+  <SUBVIEW id="eqPage" left="0" top="0" width="540" height="240" visible="false" backgroundImage="bg_eq.png" passThrough="true">
+    <TEXT left="24" top="38" width="220" height="18" fontSize="10" fontStyle="bold" foregroundColor="#ff6e00" value="BASSLINE 30-BAND DSP EQUALIZER"/>
+    <BUTTON id="eqPower" left="250" top="38" sticky="true" onClick="eq.enabled = down;" down="wmpprop:eq.enabled"
+            image="switch_off.png" downImage="switch_on.png"/>
+    <TEXT id="eqPreset" left="300" top="39" width="180" height="16" fontSize="8" foregroundColor="#00e5ff" cursor="hand"
+          value="wmpprop:eq.currentPresetTitle" onClick="eq.nextPreset();"/>
+    <SLIDER id="band1" left="24" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel1" value_onChange="eq.gainLevel1=value;" cursor="hand"/>
+    <SLIDER id="band2" left="40" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel1" value_onChange="eq.gainLevel1=value;" cursor="hand"/>
+    <SLIDER id="band3" left="56" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel1" value_onChange="eq.gainLevel1=value;" cursor="hand"/>
+    <SLIDER id="band4" left="72" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel2" value_onChange="eq.gainLevel2=value;" cursor="hand"/>
+    <SLIDER id="band5" left="88" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel2" value_onChange="eq.gainLevel2=value;" cursor="hand"/>
+    <SLIDER id="band6" left="104" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel2" value_onChange="eq.gainLevel2=value;" cursor="hand"/>
+    <SLIDER id="band7" left="120" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel3" value_onChange="eq.gainLevel3=value;" cursor="hand"/>
+    <SLIDER id="band8" left="136" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel3" value_onChange="eq.gainLevel3=value;" cursor="hand"/>
+    <SLIDER id="band9" left="152" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel3" value_onChange="eq.gainLevel3=value;" cursor="hand"/>
+    <SLIDER id="band10" left="168" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel4" value_onChange="eq.gainLevel4=value;" cursor="hand"/>
+    <SLIDER id="band11" left="184" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel4" value_onChange="eq.gainLevel4=value;" cursor="hand"/>
+    <SLIDER id="band12" left="200" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel4" value_onChange="eq.gainLevel4=value;" cursor="hand"/>
+    <SLIDER id="band13" left="216" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel5" value_onChange="eq.gainLevel5=value;" cursor="hand"/>
+    <SLIDER id="band14" left="232" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel5" value_onChange="eq.gainLevel5=value;" cursor="hand"/>
+    <SLIDER id="band15" left="248" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel5" value_onChange="eq.gainLevel5=value;" cursor="hand"/>
+    <SLIDER id="band16" left="264" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel6" value_onChange="eq.gainLevel6=value;" cursor="hand"/>
+    <SLIDER id="band17" left="280" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel6" value_onChange="eq.gainLevel6=value;" cursor="hand"/>
+    <SLIDER id="band18" left="296" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel6" value_onChange="eq.gainLevel6=value;" cursor="hand"/>
+    <SLIDER id="band19" left="312" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel7" value_onChange="eq.gainLevel7=value;" cursor="hand"/>
+    <SLIDER id="band20" left="328" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel7" value_onChange="eq.gainLevel7=value;" cursor="hand"/>
+    <SLIDER id="band21" left="344" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel7" value_onChange="eq.gainLevel7=value;" cursor="hand"/>
+    <SLIDER id="band22" left="360" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel8" value_onChange="eq.gainLevel8=value;" cursor="hand"/>
+    <SLIDER id="band23" left="376" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel8" value_onChange="eq.gainLevel8=value;" cursor="hand"/>
+    <SLIDER id="band24" left="392" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel8" value_onChange="eq.gainLevel8=value;" cursor="hand"/>
+    <SLIDER id="band25" left="408" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel9" value_onChange="eq.gainLevel9=value;" cursor="hand"/>
+    <SLIDER id="band26" left="424" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel9" value_onChange="eq.gainLevel9=value;" cursor="hand"/>
+    <SLIDER id="band27" left="440" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel9" value_onChange="eq.gainLevel9=value;" cursor="hand"/>
+    <SLIDER id="band28" left="456" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel10" value_onChange="eq.gainLevel10=value;" cursor="hand"/>
+    <SLIDER id="band29" left="472" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel10" value_onChange="eq.gainLevel10=value;" cursor="hand"/>
+    <SLIDER id="band30" left="488" top="70" width="9" height="96" direction="vertical"
+            min="-12" max="12" backgroundImage="seek_back.png" thumbImage="thumb.png" thumbHoverImage="thumb_hot.png"
+            value="wmpprop:eq.gainLevel10" value_onChange="eq.gainLevel10=value;" cursor="hand"/>
+    <TEXT left="24" top="174" width="100" height="14" fontSize="7" foregroundColor="#00e5ff" value="25Hz [SUB-BASS]"/>
+    <TEXT left="240" top="174" width="80" height="14" fontSize="7" foregroundColor="#00ff88" value="1kHz [MID]"/>
+    <TEXT left="460" top="174" width="60" height="14" fontSize="7" foregroundColor="#ff6e00" value="20kHz [HIGH]"/>
+  </SUBVIEW>
+
+</VIEW>
+</THEME>

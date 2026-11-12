@@ -5126,6 +5126,67 @@ impl App {
             .iter()
             .map(|preset| preset.name.to_owned())
             .collect();
+        let (lyrics_current, lyrics_next, lyrics_all, lyrics_synced, has_lyrics) =
+            match &self.lyrics {
+                crate::Loadable::Loaded(Some(lyrics)) if !lyrics.instrumental => {
+                    let position_ms = now.as_ref().map_or(0, |n| n.position_ms);
+                    let all = lyrics
+                        .lines
+                        .iter()
+                        .map(|l| l.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    if lyrics.synced {
+                        let active_idx = lyrics.active_line(position_ms);
+                        let current = active_idx
+                            .and_then(|idx| lyrics.lines.get(idx))
+                            .map(|l| l.text.clone())
+                            .unwrap_or_else(|| {
+                                if active_idx.is_none() && !lyrics.lines.is_empty() {
+                                    "♪ (Instrumental intro) ♪".to_owned()
+                                } else {
+                                    String::new()
+                                }
+                            });
+                        let next = active_idx
+                            .map(|idx| idx + 1)
+                            .and_then(|idx| lyrics.lines.get(idx))
+                            .map(|l| l.text.clone())
+                            .or_else(|| {
+                                if active_idx.is_none() {
+                                    lyrics.lines.first().map(|l| l.text.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_default();
+                        (current, next, all, true, true)
+                    } else {
+                        let full = lyrics
+                            .lines
+                            .iter()
+                            .map(|l| l.text.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        (full, String::new(), all, false, true)
+                    }
+                }
+                crate::Loadable::Loaded(Some(lyrics)) if lyrics.instrumental => (
+                    "♪ (Instrumental) ♪".to_owned(),
+                    String::new(),
+                    String::new(),
+                    false,
+                    true,
+                ),
+                crate::Loadable::Loading => (
+                    "Loading lyrics...".to_owned(),
+                    String::new(),
+                    String::new(),
+                    false,
+                    false,
+                ),
+                _ => (String::new(), String::new(), String::new(), false, false),
+            };
         Deck {
             state,
             position_s: now
@@ -5162,6 +5223,11 @@ impl App {
                 crate::settings::VisMode::Scope => 1,
                 crate::settings::VisMode::Off => 2,
             },
+            lyrics_current,
+            lyrics_next,
+            lyrics_all,
+            lyrics_synced,
+            has_lyrics,
         }
     }
 

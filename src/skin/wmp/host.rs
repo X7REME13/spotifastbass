@@ -196,6 +196,11 @@ impl Bridge<'_> {
         match name {
             "imagesourcewidth" | "imagesourceheight" | "markercount" => number(0.0),
             "attributecount" => number(ATOMS.len() as f64),
+            "lyrics" | "currentlyrics" => text(&self.deck().lyrics_current),
+            "nextlyrics" => text(&self.deck().lyrics_next),
+            "alllyrics" | "fulllyrics" => text(&self.deck().lyrics_all),
+            "haslyrics" => Value::Bool(self.deck().has_lyrics),
+            "lyricssynced" => Value::Bool(self.deck().lyrics_synced),
             _ => song_info(song, self.deck().bitrate, name),
         }
     }
@@ -219,6 +224,11 @@ impl Bridge<'_> {
             "isonline" => Value::Bool(true),
             "versioninfo" => text("9.0.0.0"),
             "fullscreen" => Value::Bool(false),
+            "currentlyrics" | "lyrics" => text(&deck.lyrics_current),
+            "nextlyrics" => text(&deck.lyrics_next),
+            "alllyrics" | "fulllyrics" => text(&deck.lyrics_all),
+            "haslyrics" => Value::Bool(deck.has_lyrics),
+            "lyricssynced" => Value::Bool(deck.lyrics_synced),
             _ => Value::Undefined,
         }
     }
@@ -1045,7 +1055,13 @@ impl Bridge<'_> {
         Ok(match name {
             // Item information is always a string, durations included.
             "getiteminfo" | "getiteminfobytype" => {
-                text(&text_of(&song_info(song, bitrate, &arg_text(args, 0))))
+                let attr = arg_text(args, 0);
+                match attr.to_ascii_lowercase().as_str() {
+                    "lyrics" | "currentlyrics" => text(&self.deck().lyrics_current),
+                    "nextlyrics" => text(&self.deck().lyrics_next),
+                    "alllyrics" | "fulllyrics" => text(&self.deck().lyrics_all),
+                    _ => text(&text_of(&song_info(song, bitrate, &attr))),
+                }
             }
             "getiteminfobyatom" => {
                 let atom = arg_number(args, 0);

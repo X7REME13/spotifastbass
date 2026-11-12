@@ -54,6 +54,16 @@ pub struct Deck {
     pub eq_preset: Option<usize>,
     /// The visualisation: 0 bars, 1 sound wave, 2 none.
     pub effect: usize,
+    /// Active sung line of lyrics.
+    pub lyrics_current: String,
+    /// Upcoming line of lyrics.
+    pub lyrics_next: String,
+    /// Full lyrics text or plain lyrics block.
+    pub lyrics_all: String,
+    /// Whether lyrics are synchronized to time.
+    pub lyrics_synced: bool,
+    /// Whether any lyrics are available.
+    pub has_lyrics: bool,
 }
 
 impl Default for Deck {
@@ -77,6 +87,11 @@ impl Default for Deck {
             eq_presets: Vec::new(),
             eq_preset: None,
             effect: 0,
+            lyrics_current: String::new(),
+            lyrics_next: String::new(),
+            lyrics_all: String::new(),
+            lyrics_synced: false,
+            has_lyrics: false,
         }
     }
 }
