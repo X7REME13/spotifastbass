@@ -284,7 +284,7 @@ pub struct Settings {
     /// Whether dual-output subwoofer routing is enabled.
     #[serde(default)]
     pub subwoofer_enabled: bool,
-    /// Dedicated audio device for subwoofer output (e.g. Jazz Acoustic USB DAC).
+    /// Dedicated audio device for subwoofer output.
     #[serde(default)]
     pub subwoofer_device: Option<String>,
     /// Low-pass filter cutoff frequency in Hz (20.0 to 1000.0, default 80.0).

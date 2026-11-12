@@ -2393,7 +2393,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             gettext(locale, "Dual output subwoofer"),
             gettext(
                 locale,
-                "Route low frequencies to a secondary amplifier (e.g. Jazz Acoustic) while keeping mains full-range.",
+                "Route low frequencies to a secondary amplifier or subwoofer while keeping mains full-range.",
             ),
         ),
         RowText::new(
