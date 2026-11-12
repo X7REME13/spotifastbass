@@ -479,7 +479,13 @@ impl Default for SubwooferDsp {
 
 impl SubwooferDsp {
     /// Creates a new subwoofer processor at `sample_rate`.
-    pub fn new(cutoff_hz: f32, gain_db: f32, delay_ms: f32, stereo: bool, sample_rate: u32) -> Self {
+    pub fn new(
+        cutoff_hz: f32,
+        gain_db: f32,
+        delay_ms: f32,
+        stereo: bool,
+        sample_rate: u32,
+    ) -> Self {
         let sample_rate_f = f64::from(sample_rate.max(1));
         let cutoff = f64::from(cutoff_hz).clamp(20.0, 1000.0);
         let q = std::f64::consts::FRAC_1_SQRT_2;
@@ -487,7 +493,8 @@ impl SubwooferDsp {
         let s2_l = Biquad::lowpass(cutoff, q, sample_rate_f);
         let s1_r = Biquad::lowpass(cutoff, q, sample_rate_f);
         let s2_r = Biquad::lowpass(cutoff, q, sample_rate_f);
-        let delay_samples = (delay_ms.clamp(0.0, 500.0) as f64 * sample_rate_f / 1000.0).round() as usize;
+        let delay_samples =
+            (delay_ms.clamp(0.0, 500.0) as f64 * sample_rate_f / 1000.0).round() as usize;
         let delay_buffer_l = if delay_samples > 0 {
             vec![0.0f32; delay_samples]
         } else {
@@ -563,7 +570,8 @@ impl SubwooferDsp {
     }
 
     pub fn set_delay_ms(&mut self, delay_ms: f32) {
-        let new_samples = (delay_ms.clamp(0.0, 500.0) as f64 * self.sample_rate / 1000.0).round() as usize;
+        let new_samples =
+            (delay_ms.clamp(0.0, 500.0) as f64 * self.sample_rate / 1000.0).round() as usize;
         if new_samples != self.delay_samples {
             self.delay_samples = new_samples;
             self.delay_buffer_l = if new_samples > 0 {
@@ -952,7 +960,10 @@ mod tests {
 
         // Near DC (10 Hz): virtually 0 dB (passband)
         let gain_dc = lpf.gain_db_at(10.0);
-        assert!(gain_dc.abs() < 0.1, "DC gain should be ~0 dB, got {gain_dc}");
+        assert!(
+            gain_dc.abs() < 0.1,
+            "DC gain should be ~0 dB, got {gain_dc}"
+        );
 
         // At cutoff (80 Hz): -3.01 dB (half-power point for 2nd order Butterworth)
         let gain_cutoff = lpf.gain_db_at(80.0);
@@ -975,7 +986,10 @@ mod tests {
 
         // Check cascaded frequency response
         let gain_20 = dsp.stage1_l.gain_db_at(20.0) + dsp.stage2_l.gain_db_at(20.0);
-        assert!(gain_20.abs() < 0.2, "20 Hz sub-bass should be ~0 dB, got {gain_20}");
+        assert!(
+            gain_20.abs() < 0.2,
+            "20 Hz sub-bass should be ~0 dB, got {gain_20}"
+        );
 
         let gain_80 = dsp.stage1_l.gain_db_at(80.0) + dsp.stage2_l.gain_db_at(80.0);
         assert!(

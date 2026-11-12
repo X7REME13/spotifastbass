@@ -765,7 +765,10 @@ impl RodioSink {
 
     /// Attaches shared subwoofer configuration to this sink for real-time parameter sync.
     pub fn with_subwoofer(mut self, shared: SharedSubwoofer) -> Self {
-        let config = shared.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let config = shared
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
         self.subwoofer_dsp = crate::eq::SubwooferDsp::new(
             config.cutoff_hz,
             config.gain_db,
@@ -996,8 +999,7 @@ impl Sink for RodioSink {
                 sub.sink = sink;
                 sub.envelope = envelope;
                 sub.queued = Queued::new();
-                sub.resampler =
-                    Resampler::new(SAMPLE_RATE, sub.sample_rate, NUM_CHANNELS as usize);
+                sub.resampler = Resampler::new(SAMPLE_RATE, sub.sample_rate, NUM_CHANNELS as usize);
                 sub.fed = false;
                 sub.last_write = None;
             }
@@ -1013,7 +1015,9 @@ impl Sink for RodioSink {
         let now = Instant::now();
 
         // Feed secondary subwoofer stream with low-pass filtered audio and buffer sync
-        if self.subwoofer_config.enabled && let Some(sub) = &mut self.subwoofer_output {
+        if self.subwoofer_config.enabled
+            && let Some(sub) = &mut self.subwoofer_output
+        {
             sub.transport.fade_in();
             let mut sub_samples = samples.clone();
             self.subwoofer_dsp.process(&mut sub_samples);

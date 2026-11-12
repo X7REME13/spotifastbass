@@ -4220,69 +4220,6 @@ msgstr ""
 "PC o máquina virtual no lo ofrece. Instala el controlador gráfico o activa "
 "la aceleración por GPU de la máquina virtual. ¿Abrir {url} para saber más?"
 
-#: src/ui/settings.rs:2390
-msgid "Subwoofer (Dual Output)"
-msgstr "Subwoofer (doble salida)"
-
-#: src/ui/settings.rs:2393
-msgid "Dual output subwoofer"
-msgstr "Subwoofer de doble salida"
-
-#: src/ui/settings.rs:2394
-msgid ""
-"Route low frequencies to a secondary amplifier (e.g. Jazz Acoustic) while "
-"keeping mains full-range."
-msgstr ""
-"Enruta frecuencias bajas a un amplificador secundario (ej. Jazz Acoustic) "
-"manteniendo los altavoces principales en rango completo."
-
-#: src/ui/settings.rs:2400
-msgid "Subwoofer device"
-msgstr "Dispositivo del subwoofer"
-
-#: src/ui/settings.rs:2401
-msgid "The target audio output device for the low-passed subwoofer stream."
-msgstr ""
-"Dispositivo de salida de audio de destino para el flujo con filtro pasa-bajos "
-"del subwoofer."
-
-#: src/ui/settings.rs:2407
-msgid "Stereo subwoofer"
-msgstr "Subwoofer estéreo"
-
-#: src/ui/settings.rs:2408
-msgid ""
-"Preserve independent left and right low frequencies for dual subwoofers or "
-"chair shakers."
-msgstr ""
-"Mantiene los canales izquierdo y derecho independientes para subwoofers "
-"duales o altavoces táctiles de asiento."
-
-#: src/ui/settings.rs:2407
-msgid "Crossover frequency (LPF)"
-msgstr "Frecuencia de cruce (LPF)"
-
-#: src/ui/settings.rs:2408
-msgid "Linkwitz-Riley 4th-order (24 dB/oct) low-pass cutoff filter."
-msgstr "Filtro pasa-bajos Linkwitz-Riley de 4.º orden (24 dB/oct)."
-
-#: src/ui/settings.rs:2414
-msgid "Subwoofer gain trim"
-msgstr "Ajuste de ganancia del subwoofer"
-
-#: src/ui/settings.rs:2415
-msgid "Level trim for the subwoofer amplifier in decibels."
-msgstr "Ajuste de nivel para el amplificador del subwoofer en decibelios."
-
-#: src/ui/settings.rs:2418
-msgid "Delay compensation"
-msgstr "Compensación de retardo"
-
-#: src/ui/settings.rs:2419
-msgid "Buffer delay compensation for acoustic distance and phase alignment."
-msgstr ""
-"Compensación de retardo de búfer para distancia acústica y alineación de fase."
-
 #~ msgid "3. Pair once in Spotify"
 #~ msgstr "3. Empareja una vez en Spotify"
 

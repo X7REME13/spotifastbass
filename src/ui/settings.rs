@@ -2419,7 +2419,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         ),
         RowText::new(
             gettext(locale, "Subwoofer gain trim"),
-            gettext(locale, "Level trim for the subwoofer amplifier in decibels."),
+            gettext(
+                locale,
+                "Level trim for the subwoofer amplifier in decibels.",
+            ),
         ),
         RowText::new(
             gettext(locale, "Delay compensation"),
