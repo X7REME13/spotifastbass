@@ -517,6 +517,7 @@ mod tests {
                 crate::settings::ProxyConfig::Off,
                 crate::vis::AudioTap::new(),
                 crate::eq::shared(),
+                crate::sink::shared_subwoofer(crate::sink::SubwooferConfig::default()),
             )
         };
         let bridge = Bridge {
@@ -2865,6 +2866,7 @@ mod pipewire {
                     crate::settings::ProxyConfig::Off,
                     crate::vis::AudioTap::new(),
                     crate::eq::shared(),
+                    crate::sink::shared_subwoofer(crate::sink::SubwooferConfig::default()),
                 );
                 // As in the app, the output finds its own way to the default
                 // sink, which here is the only one there is.
@@ -3229,6 +3231,7 @@ mod pipewire {
                 crate::settings::ProxyConfig::Off,
                 tap.clone(),
                 eq,
+                crate::sink::shared_subwoofer(crate::sink::SubwooferConfig::default()),
             );
             // This inactive bridge also exercises ordinary default-output
             // selection, without sending a tone to the desktop's speakers.

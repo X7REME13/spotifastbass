@@ -216,7 +216,7 @@ impl AudioControl {
         target.envelope = Some(envelope);
     }
 
-    pub(crate) fn register_subwoofer(&self, sink: &Arc<rodio::Sink>, envelope: Arc<Envelope>) {
+    fn register_subwoofer(&self, sink: &Arc<rodio::Sink>, envelope: Arc<Envelope>) {
         let mut target = self.target.lock().unwrap_or_else(PoisonError::into_inner);
         target.sub_sink = Arc::downgrade(sink);
         target.sub_envelope = Some(envelope);
