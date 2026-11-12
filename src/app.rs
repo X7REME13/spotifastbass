@@ -1149,6 +1149,7 @@ impl App {
             cutoff_hz: settings.subwoofer_cutoff_hz,
             gain_db: settings.subwoofer_gain_db,
             delay_ms: settings.subwoofer_delay_ms,
+            stereo: settings.subwoofer_stereo,
         });
         let engine_config = engine_config(
             &dirs,
@@ -5401,6 +5402,7 @@ impl App {
                 cutoff_hz: self.settings.subwoofer_cutoff_hz,
                 gain_db: self.settings.subwoofer_gain_db,
                 delay_ms: self.settings.subwoofer_delay_ms,
+                stereo: self.settings.subwoofer_stereo,
             };
         }
         self.settings_dirty = true;

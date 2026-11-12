@@ -296,6 +296,9 @@ pub struct Settings {
     /// Subwoofer delay offset in milliseconds for acoustic distance alignment (0.0 to 500.0, default 0.0).
     #[serde(default)]
     pub subwoofer_delay_ms: f32,
+    /// Whether subwoofer output retains stereo separation (dual-channel) or downmixes to mono.
+    #[serde(default)]
+    pub subwoofer_stereo: bool,
     pub audio_cache: bool,
     pub audio_cache_mb: u64,
     /// The folder, searched with its subfolders, that a playlist's
@@ -516,6 +519,7 @@ impl Default for Settings {
             subwoofer_cutoff_hz: default_subwoofer_cutoff_hz(),
             subwoofer_gain_db: 0.0,
             subwoofer_delay_ms: 0.0,
+            subwoofer_stereo: false,
             local_files_folder: None,
             audio_buffer_ms: default_buffer_ms(),
             audio_cache: true,

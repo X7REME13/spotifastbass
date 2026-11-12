@@ -4044,6 +4044,16 @@ msgid "The target audio output device for the low-passed subwoofer stream."
 msgstr ""
 
 #: src/ui/settings.rs:2407
+msgid "Stereo subwoofer"
+msgstr ""
+
+#: src/ui/settings.rs:2408
+msgid ""
+"Preserve independent left and right low frequencies for dual subwoofers or "
+"chair shakers."
+msgstr ""
+
+#: src/ui/settings.rs:2407
 msgid "Crossover frequency (LPF)"
 msgstr ""
 

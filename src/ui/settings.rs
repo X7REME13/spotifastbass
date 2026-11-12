@@ -2404,6 +2404,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             ),
         ),
         RowText::new(
+            gettext(locale, "Stereo subwoofer"),
+            gettext(
+                locale,
+                "Preserve independent left and right low frequencies for dual subwoofers or chair shakers.",
+            ),
+        ),
+        RowText::new(
             gettext(locale, "Crossover frequency (LPF)"),
             gettext(
                 locale,
@@ -2502,6 +2509,26 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     &subwoofer,
                     &subwoofer_rows[2],
                     |ui| {
+                        if widgets::switch(
+                            ui,
+                            &palette,
+                            &subwoofer,
+                            &mut app.settings.subwoofer_stereo,
+                        )
+                        .changed()
+                        {
+                            changed = true;
+                            app.push_subwoofer();
+                        }
+                    },
+                );
+                filtered_row(
+                    ui,
+                    &palette,
+                    &needle,
+                    &subwoofer,
+                    &subwoofer_rows[3],
+                    |ui| {
                         let mut cutoff = app.settings.subwoofer_cutoff_hz;
                         if setting_slider(
                             ui,
@@ -2524,7 +2551,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     &palette,
                     &needle,
                     &subwoofer,
-                    &subwoofer_rows[3],
+                    &subwoofer_rows[4],
                     |ui| {
                         let mut gain = app.settings.subwoofer_gain_db;
                         if setting_slider(
@@ -2548,7 +2575,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     &palette,
                     &needle,
                     &subwoofer,
-                    &subwoofer_rows[4],
+                    &subwoofer_rows[5],
                     |ui| {
                         let mut delay = app.settings.subwoofer_delay_ms;
                         if setting_slider(

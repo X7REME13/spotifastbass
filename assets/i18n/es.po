@@ -4247,6 +4247,18 @@ msgstr ""
 "del subwoofer."
 
 #: src/ui/settings.rs:2407
+msgid "Stereo subwoofer"
+msgstr "Subwoofer estéreo"
+
+#: src/ui/settings.rs:2408
+msgid ""
+"Preserve independent left and right low frequencies for dual subwoofers or "
+"chair shakers."
+msgstr ""
+"Mantiene los canales izquierdo y derecho independientes para subwoofers "
+"duales o altavoces táctiles de asiento."
+
+#: src/ui/settings.rs:2407
 msgid "Crossover frequency (LPF)"
 msgstr "Frecuencia de cruce (LPF)"
 

@@ -460,29 +460,40 @@ pub struct SubwooferDsp {
     cutoff_hz: f64,
     gain_db: f32,
     gain_linear: f32,
+    stereo: bool,
     delay_samples: usize,
-    delay_buffer: Vec<f32>,
+    delay_buffer_l: Vec<f32>,
+    delay_buffer_r: Vec<f32>,
     delay_write_pos: usize,
-    stage1: Biquad,
-    stage2: Biquad,
+    stage1_l: Biquad,
+    stage2_l: Biquad,
+    stage1_r: Biquad,
+    stage2_r: Biquad,
 }
 
 impl Default for SubwooferDsp {
     fn default() -> Self {
-        Self::new(80.0, 0.0, 0.0, SAMPLE_RATE)
+        Self::new(80.0, 0.0, 0.0, false, SAMPLE_RATE)
     }
 }
 
 impl SubwooferDsp {
     /// Creates a new subwoofer processor at `sample_rate`.
-    pub fn new(cutoff_hz: f32, gain_db: f32, delay_ms: f32, sample_rate: u32) -> Self {
+    pub fn new(cutoff_hz: f32, gain_db: f32, delay_ms: f32, stereo: bool, sample_rate: u32) -> Self {
         let sample_rate_f = f64::from(sample_rate.max(1));
         let cutoff = f64::from(cutoff_hz).clamp(20.0, 1000.0);
         let q = std::f64::consts::FRAC_1_SQRT_2;
-        let s1 = Biquad::lowpass(cutoff, q, sample_rate_f);
-        let s2 = Biquad::lowpass(cutoff, q, sample_rate_f);
+        let s1_l = Biquad::lowpass(cutoff, q, sample_rate_f);
+        let s2_l = Biquad::lowpass(cutoff, q, sample_rate_f);
+        let s1_r = Biquad::lowpass(cutoff, q, sample_rate_f);
+        let s2_r = Biquad::lowpass(cutoff, q, sample_rate_f);
         let delay_samples = (delay_ms.clamp(0.0, 500.0) as f64 * sample_rate_f / 1000.0).round() as usize;
-        let delay_buffer = if delay_samples > 0 {
+        let delay_buffer_l = if delay_samples > 0 {
+            vec![0.0f32; delay_samples]
+        } else {
+            Vec::new()
+        };
+        let delay_buffer_r = if delay_samples > 0 {
             vec![0.0f32; delay_samples]
         } else {
             Vec::new()
@@ -494,18 +505,25 @@ impl SubwooferDsp {
             cutoff_hz: cutoff,
             gain_db,
             gain_linear,
+            stereo,
             delay_samples,
-            delay_buffer,
+            delay_buffer_l,
+            delay_buffer_r,
             delay_write_pos: 0,
-            stage1: s1,
-            stage2: s2,
+            stage1_l: s1_l,
+            stage2_l: s2_l,
+            stage1_r: s1_r,
+            stage2_r: s2_r,
         }
     }
 
     pub fn reset(&mut self) {
-        self.stage1.reset_state();
-        self.stage2.reset_state();
-        self.delay_buffer.fill(0.0);
+        self.stage1_l.reset_state();
+        self.stage2_l.reset_state();
+        self.stage1_r.reset_state();
+        self.stage2_r.reset_state();
+        self.delay_buffer_l.fill(0.0);
+        self.delay_buffer_r.fill(0.0);
         self.delay_write_pos = 0;
     }
 
@@ -516,16 +534,26 @@ impl SubwooferDsp {
             let q = std::f64::consts::FRAC_1_SQRT_2;
             let s1 = Biquad::lowpass(cutoff, q, self.sample_rate);
             let s2 = Biquad::lowpass(cutoff, q, self.sample_rate);
-            self.stage1.b0 = s1.b0;
-            self.stage1.b1 = s1.b1;
-            self.stage1.b2 = s1.b2;
-            self.stage1.a1 = s1.a1;
-            self.stage1.a2 = s1.a2;
-            self.stage2.b0 = s2.b0;
-            self.stage2.b1 = s2.b1;
-            self.stage2.b2 = s2.b2;
-            self.stage2.a1 = s2.a1;
-            self.stage2.a2 = s2.a2;
+            self.stage1_l.b0 = s1.b0;
+            self.stage1_l.b1 = s1.b1;
+            self.stage1_l.b2 = s1.b2;
+            self.stage1_l.a1 = s1.a1;
+            self.stage1_l.a2 = s1.a2;
+            self.stage2_l.b0 = s2.b0;
+            self.stage2_l.b1 = s2.b1;
+            self.stage2_l.b2 = s2.b2;
+            self.stage2_l.a1 = s2.a1;
+            self.stage2_l.a2 = s2.a2;
+            self.stage1_r.b0 = s1.b0;
+            self.stage1_r.b1 = s1.b1;
+            self.stage1_r.b2 = s1.b2;
+            self.stage1_r.a1 = s1.a1;
+            self.stage1_r.a2 = s1.a2;
+            self.stage2_r.b0 = s2.b0;
+            self.stage2_r.b1 = s2.b1;
+            self.stage2_r.b2 = s2.b2;
+            self.stage2_r.a1 = s2.a1;
+            self.stage2_r.a2 = s2.a2;
         }
     }
 
@@ -538,7 +566,12 @@ impl SubwooferDsp {
         let new_samples = (delay_ms.clamp(0.0, 500.0) as f64 * self.sample_rate / 1000.0).round() as usize;
         if new_samples != self.delay_samples {
             self.delay_samples = new_samples;
-            self.delay_buffer = if new_samples > 0 {
+            self.delay_buffer_l = if new_samples > 0 {
+                vec![0.0f32; new_samples]
+            } else {
+                Vec::new()
+            };
+            self.delay_buffer_r = if new_samples > 0 {
                 vec![0.0f32; new_samples]
             } else {
                 Vec::new()
@@ -547,27 +580,59 @@ impl SubwooferDsp {
         }
     }
 
+    pub fn set_stereo(&mut self, stereo: bool) {
+        if self.stereo != stereo {
+            self.stereo = stereo;
+            self.reset();
+        }
+    }
+
     /// Process interleaved stereo audio samples in-place.
     ///
-    /// Sums (L + R) * 0.5 to mono, scales by gain, runs through the 4th-order
-    /// Linkwitz-Riley low-pass filter, applies optional delay, and writes the
-    /// resulting bass signal to both channels [sub, sub].
+    /// When `stereo` is false: sums (L + R) * 0.5 to mono, scales by gain,
+    /// runs through the 4th-order Linkwitz-Riley low-pass filter, applies optional
+    /// delay, and writes the resulting bass signal to both channels [sub, sub].
+    ///
+    /// When `stereo` is true: filters and delays Left and Right channels independently,
+    /// preserving stereo separation for dual subwoofers or chair tactile transducers.
     pub fn process(&mut self, samples: &mut [f32]) {
-        let has_delay = !self.delay_buffer.is_empty();
+        let has_delay = !self.delay_buffer_l.is_empty();
         for frame in samples.chunks_exact_mut(2) {
-            let mono = (frame[0] + frame[1]) * 0.5 * self.gain_linear;
-            let s1 = self.stage1.run(mono as f64);
-            let s2 = self.stage2.run(s1) as f32;
-            let out = if has_delay {
-                let delayed = self.delay_buffer[self.delay_write_pos];
-                self.delay_buffer[self.delay_write_pos] = s2;
-                self.delay_write_pos = (self.delay_write_pos + 1) % self.delay_buffer.len();
-                delayed
+            if self.stereo {
+                let in_l = frame[0] * self.gain_linear;
+                let in_r = frame[1] * self.gain_linear;
+                let s1_l = self.stage1_l.run(in_l as f64);
+                let s2_l = self.stage2_l.run(s1_l) as f32;
+                let s1_r = self.stage1_r.run(in_r as f64);
+                let s2_r = self.stage2_r.run(s1_r) as f32;
+                let (out_l, out_r) = if has_delay {
+                    let del_l = self.delay_buffer_l[self.delay_write_pos];
+                    let del_r = self.delay_buffer_r[self.delay_write_pos];
+                    self.delay_buffer_l[self.delay_write_pos] = s2_l;
+                    self.delay_buffer_r[self.delay_write_pos] = s2_r;
+                    (del_l, del_r)
+                } else {
+                    (s2_l, s2_r)
+                };
+                frame[0] = out_l;
+                frame[1] = out_r;
             } else {
-                s2
-            };
-            frame[0] = out;
-            frame[1] = out;
+                let mono = (frame[0] + frame[1]) * 0.5 * self.gain_linear;
+                let s1 = self.stage1_l.run(mono as f64);
+                let s2 = self.stage2_l.run(s1) as f32;
+                let out = if has_delay {
+                    let delayed = self.delay_buffer_l[self.delay_write_pos];
+                    self.delay_buffer_l[self.delay_write_pos] = s2;
+                    delayed
+                } else {
+                    s2
+                };
+                frame[0] = out;
+                frame[1] = out;
+            }
+            if has_delay {
+                self.delay_write_pos = (self.delay_write_pos + 1) % self.delay_samples;
+            }
         }
     }
 }
@@ -906,19 +971,19 @@ mod tests {
 
     #[test]
     fn subwoofer_dsp_lr4_crossover_and_mono_downmix() {
-        let mut dsp = SubwooferDsp::new(80.0, 0.0, 0.0, 44100);
+        let mut dsp = SubwooferDsp::new(80.0, 0.0, 0.0, false, 44100);
 
         // Check cascaded frequency response
-        let gain_20 = dsp.stage1.gain_db_at(20.0) + dsp.stage2.gain_db_at(20.0);
+        let gain_20 = dsp.stage1_l.gain_db_at(20.0) + dsp.stage2_l.gain_db_at(20.0);
         assert!(gain_20.abs() < 0.2, "20 Hz sub-bass should be ~0 dB, got {gain_20}");
 
-        let gain_80 = dsp.stage1.gain_db_at(80.0) + dsp.stage2.gain_db_at(80.0);
+        let gain_80 = dsp.stage1_l.gain_db_at(80.0) + dsp.stage2_l.gain_db_at(80.0);
         assert!(
             (gain_80 - (-6.02)).abs() < 0.25,
             "LR4 crossover at 80 Hz must be -6.02 dB, got {gain_80}"
         );
 
-        let gain_160 = dsp.stage1.gain_db_at(160.0) + dsp.stage2.gain_db_at(160.0);
+        let gain_160 = dsp.stage1_l.gain_db_at(160.0) + dsp.stage2_l.gain_db_at(160.0);
         assert!(
             (gain_160 - (-24.6)).abs() < 1.0,
             "LR4 rolloff at 160 Hz must be ~ -24 dB, got {gain_160}"
@@ -935,9 +1000,19 @@ mod tests {
     }
 
     #[test]
+    fn subwoofer_dsp_stereo_separation() {
+        let mut dsp = SubwooferDsp::new(80.0, 0.0, 0.0, true, 44100);
+        // If L = 1.0 and R = 0.0 in stereo mode, L should pass low-passed bass and R should be silence
+        let mut samples = vec![1.0, 0.0, 1.0, 0.0];
+        dsp.process(&mut samples);
+        assert!(samples[0] > 0.0);
+        assert_eq!(samples[1], 0.0);
+    }
+
+    #[test]
     fn subwoofer_dsp_delay_line() {
         // 44100 Hz, 1 ms delay = 44.1 -> 44 samples delay (88 interleaved floats)
-        let mut dsp = SubwooferDsp::new(80.0, 0.0, 1.0, 44100);
+        let mut dsp = SubwooferDsp::new(80.0, 0.0, 1.0, false, 44100);
         assert_eq!(dsp.delay_samples, 44);
 
         // Process 44 frames of silence followed by 1 frame of impulse

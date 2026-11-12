@@ -480,6 +480,7 @@ pub struct SubwooferConfig {
     pub cutoff_hz: f32,
     pub gain_db: f32,
     pub delay_ms: f32,
+    pub stereo: bool,
 }
 
 impl Default for SubwooferConfig {
@@ -490,6 +491,7 @@ impl Default for SubwooferConfig {
             cutoff_hz: 80.0,
             gain_db: 0.0,
             delay_ms: 0.0,
+            stereo: false,
         }
     }
 }
@@ -768,6 +770,7 @@ impl RodioSink {
             config.cutoff_hz,
             config.gain_db,
             config.delay_ms,
+            config.stereo,
             SAMPLE_RATE,
         );
         self.subwoofer_config = config;
@@ -953,6 +956,10 @@ impl Sink for RodioSink {
             if (wanted.delay_ms - self.subwoofer_config.delay_ms).abs() > 0.01 {
                 self.subwoofer_dsp.set_delay_ms(wanted.delay_ms);
                 self.subwoofer_config.delay_ms = wanted.delay_ms;
+            }
+            if wanted.stereo != self.subwoofer_config.stereo {
+                self.subwoofer_dsp.set_stereo(wanted.stereo);
+                self.subwoofer_config.stereo = wanted.stereo;
             }
             if wanted.enabled != self.subwoofer_config.enabled
                 || wanted.device != self.subwoofer_config.device
