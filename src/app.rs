@@ -5128,7 +5128,7 @@ impl App {
             .collect();
         let (lyrics_current, lyrics_next, lyrics_all, lyrics_synced, has_lyrics) =
             match &self.lyrics {
-                crate::Loadable::Loaded(Some(lyrics)) if !lyrics.instrumental => {
+                Loadable::Loaded(Some(lyrics)) if !lyrics.instrumental => {
                     let position_ms = now.as_ref().map_or(0, |n| n.position_ms);
                     let all = lyrics
                         .lines
@@ -5171,14 +5171,14 @@ impl App {
                         (full, String::new(), all, false, true)
                     }
                 }
-                crate::Loadable::Loaded(Some(lyrics)) if lyrics.instrumental => (
+                Loadable::Loaded(Some(lyrics)) if lyrics.instrumental => (
                     "♪ (Instrumental) ♪".to_owned(),
                     String::new(),
                     String::new(),
                     false,
                     true,
                 ),
-                crate::Loadable::Loading => (
+                Loadable::Loading => (
                     "Loading lyrics...".to_owned(),
                     String::new(),
                     String::new(),
